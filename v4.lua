@@ -15,7 +15,21 @@ local INSTITUTIONAL_MODE = true
 local GUI_VISIBLE = true
 
 -- STATE
-local ESPSettings = { Enabled=false, Line=false, Box=false, Box3D=false, Name=false, Health=false, Distance=false, Skeleton=false, Tracer=false, Weapon=false, Time=false, MaxDistance=1000 }
+local ESPSettings = { 
+    Enabled=false, Line=false, Box=false, Box3D=false, Name=false, Health=false, Distance=false, 
+    Skeleton=false, Tracer=false, Weapon=false, Time=false, MaxDistance=1000, TeamCheck=false,
+    Colors = {
+        Line = Color3.new(0, 1, 0),
+        Box = Color3.new(1, 0, 0),
+        Name = Color3.new(1, 1, 1),
+        Health = Color3.new(1, 1, 1),
+        Distance = Color3.new(1, 1, 1),
+        Tracer = Color3.new(0, 1, 1),
+        Skeleton = Color3.new(1, 1, 1),
+        Weapon = Color3.new(1, 1, 0),
+        Time = Color3.new(0.5, 1, 0.5)
+    }
+}
 local PlayerSettings = { Speed=16, JumpPower=50, SpeedOn=false, JumpOn=false, NoClip=false, Fly=false, Swim=false, GiantMode=false }
 local AimSettings = { Enabled=false, FOV=120, Smooth=0.25, TargetMethod="ClosestDistance", Priority="Head", VisibleCheck=true, ShowFOV=true, TeamCheck=true, Prediction=0.15, Smoothness=8 }
 local HeadSizeSettings = { Enabled=false, Size=5 }
@@ -27,13 +41,80 @@ local MovementFeatures = { SuperSpeed=false, SpeedValue=100, TeleportDash=false,
 local UtilityFeatures = { ESPItems=false, ESPChests=false, AutoCollect=false, AutoQuest=false, AutoSell=false, AutoCraft=false, TeleportToNPC=false, SpeedHack=false, NoClipWalls=false, InfiniteZoom=false, Xray=false, Radar=false }
 local TrollFeatures = { FlingPlayers=false, OrbitPlayers=false, AttachToPlayer=false, MirrorPlayer=false, InvisibleChar=false, GiantChar=false, TinyChar=false, RainbowChar=false, SpinChar=false, VibrateChar=false, FlashChar=false, GlitchChar=false, CloneChar=false }
 local GodModeConnection = nil
-local Drawn = { lines={}, boxes={}, nameTexts={}, healthTexts={}, fovCircle=nil, targetIndicator=nil }
+local Drawn = { lines={}, boxes={}, nameTexts={}, healthTexts={}, distanceTexts={}, weaponTexts={}, timeTexts={}, skeletons={}, tracers={}, fovCircle=nil, targetIndicator=nil }
 local ModifiedHeads = {}
 
 -- HELPER FUNCTIONS 
 local function clamp(v,a,b) if v<a then return a elseif v>b then return b else return v end end
 local function isEnemy(p) if not p or p==LocalPlayer then return false end if p.Team and LocalPlayer.Team then return p.Team~=LocalPlayer.Team end return true end
-local function worldToScreen(pos) local p,onScreen=Camera:WorldToViewportPoint(pos) return Vector2.new(p.X,p.Y),onScreen end
+local function worldToScreen(pos) 
+    local p, onScreen = Camera:WorldToViewportPoint(pos) 
+    return Vector2.new(p.X, p.Y), onScreen, p.Z 
+end
+
+-- NOTIFICATION SYSTEM - نظام الإشعارات المحسّن
+local function getParentGui()
+    local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
+    if success and coreGui then
+        local success2, hui = pcall(function() return gethui() end)
+        if success2 and hui then return hui end
+        return coreGui
+    end
+    return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local function showNotification(title, text, duration)
+    duration = duration or 3
+    
+    local notif = Instance.new("ScreenGui", getParentGui())
+    notif.Name = "Notification_" .. tick()
+    notif.DisplayOrder = 2147483647
+    notif.IgnoreGuiInset = true
+    notif.ResetOnSpawn = false
+    
+    local frame = Instance.new("Frame", notif)
+    frame.Size = UDim2.new(0, 320, 0, 90)
+    frame.Position = UDim2.new(1, -340, 0, 20)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    frame.BorderSizePixel = 0
+    
+    local corner = Instance.new("UICorner", frame)
+    corner.CornerRadius = UDim.new(0, 12)
+    
+    local stroke = Instance.new("UIStroke", frame)
+    stroke.Color = Color3.fromRGB(100, 150, 255)
+    stroke.Thickness = 2
+    stroke.Transparency = 0.3
+    
+    local titleLabel = Instance.new("TextLabel", frame)
+    titleLabel.Size = UDim2.new(1, -20, 0, 28)
+    titleLabel.Position = UDim2.new(0, 10, 0, 8)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "🔥 " .. title
+    titleLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = 16
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local textLabel = Instance.new("TextLabel", frame)
+    textLabel.Size = UDim2.new(1, -20, 0, 45)
+    textLabel.Position = UDim2.new(0, 10, 0, 38)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = text
+    textLabel.TextColor3 = Color3.new(0.95, 0.95, 0.95)
+    textLabel.Font = Enum.Font.Gotham
+    textLabel.TextSize = 13
+    textLabel.TextXAlignment = Enum.TextXAlignment.Left
+    textLabel.TextWrapped = true
+    
+    frame:TweenPosition(UDim2.new(1, -340, 0, 20), "Out", "Quad", 0.4, true)
+    
+    task.delay(duration, function()
+        frame:TweenPosition(UDim2.new(1, 20, 0, 20), "In", "Quad", 0.4, true)
+        task.wait(0.5)
+        notif:Destroy()
+    end)
+end
 
 --========================================================--
 --===============  TEXT DRAWING AT TOP  ==================--
@@ -47,14 +128,14 @@ topText.Outline = true
 topText.OutlineColor = Color3.new(0, 0, 0)
 topText.Position = Vector2.new(Camera.ViewportSize.X/2, 10)
 
-Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-    topText.Position = Vector2.new(Camera.ViewportSize.X/2, 10)
-end)
-
---========================================================--
---=======================  GUI SETUP  ====================--
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
-ScreenGui.Name = "BLOODIX_V5_GUI"
+Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function() 
+     topText.Position = Vector2.new(Camera.ViewportSize.X/2, 10) 
+ end) 
+ 
+ --========================================================-- 
+  --=======================  ESP SYSTEM ====================--
+ local ScreenGui = Instance.new("ScreenGui", getParentGui())
+ ScreenGui.Name = "BLOODIX_V5_GUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.DisplayOrder = 2147483647
@@ -380,6 +461,60 @@ local function AddSlider(parent, label, y, minV, maxV, initial, callback)
     return {label = lbl, track = track, fill = fill, knob = knob}
 end
 
+local presetColors = {
+    Color3.new(1, 0, 0), -- Red
+    Color3.new(0, 1, 0), -- Green
+    Color3.new(0, 0, 1), -- Blue
+    Color3.new(1, 1, 0), -- Yellow
+    Color3.new(1, 0, 1), -- Magenta
+    Color3.new(0, 1, 1), -- Cyan
+    Color3.new(1, 1, 1), -- White
+    Color3.new(1, 0.5, 0), -- Orange
+}
+
+local function AddColorCycle(parent, label, y, initialColor, callback)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(0, 440, 0, 36)
+    frame.Position = UDim2.new(0, 10, 0, y)
+    frame.BackgroundTransparency = 1
+    
+    local lbl = Instance.new("TextLabel", frame)
+    lbl.Size = UDim2.new(0, 180, 0, 36)
+    lbl.Text = label
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextSize = 14
+    lbl.TextColor3 = Color3.new(1, 1, 1)
+    lbl.BackgroundTransparency = 1
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local btn = Instance.new("TextButton", frame)
+    btn.Size = UDim2.new(0, 100, 0, 26)
+    btn.Position = UDim2.new(0, 190, 0, 5)
+    btn.BackgroundColor3 = initialColor
+    btn.Text = ""
+    btn.BorderSizePixel = 0
+    
+    local corner = Instance.new("UICorner", btn)
+    corner.CornerRadius = UDim.new(0, 4)
+    
+    local colorIndex = 1
+    for i, color in ipairs(presetColors) do
+        if math.abs(color.R - initialColor.R) < 0.01 and math.abs(color.G - initialColor.G) < 0.01 and math.abs(color.B - initialColor.B) < 0.01 then
+            colorIndex = i
+            break
+        end
+    end
+    
+    btn.MouseButton1Click:Connect(function()
+        colorIndex = colorIndex + 1
+        if colorIndex > #presetColors then colorIndex = 1 end
+        local newColor = presetColors[colorIndex]
+        btn.BackgroundColor3 = newColor
+        if callback then callback(newColor) end
+    end)
+    return btn
+end
+
 --========================================================--
 --=======================  AIMBOT  =======================--
 AddLabel(pageAimbot,"🎯 AIMBOT SETTINGS - نظام تصويب محسّن",8)
@@ -624,74 +759,69 @@ local function createESP(player)
     if not Drawn.lines[player] then 
         Drawn.lines[player] = Drawing.new("Line")
         Drawn.lines[player].Thickness = 2
-        Drawn.lines[player].Color = Color3.new(0, 1, 0)
+        Drawn.lines[player].Color = ESPSettings.Colors.Line
         Drawn.lines[player].Visible = false
     end
     if not Drawn.boxes[player] then 
         Drawn.boxes[player] = Drawing.new("Square")
         Drawn.boxes[player].Filled = false
         Drawn.boxes[player].Thickness = 1
-        Drawn.boxes[player].Color = Color3.new(1, 0, 0)
+        Drawn.boxes[player].Color = ESPSettings.Colors.Box
         Drawn.boxes[player].Visible = false
     end
     if not Drawn.nameTexts[player] then 
         Drawn.nameTexts[player] = Drawing.new("Text")
         Drawn.nameTexts[player].Size = 14
-        Drawn.nameTexts[player].Color = Color3.new(1, 1, 1)
+        Drawn.nameTexts[player].Color = ESPSettings.Colors.Name
         Drawn.nameTexts[player].Outline = true
         Drawn.nameTexts[player].Visible = false
     end
     if not Drawn.healthTexts[player] then 
         Drawn.healthTexts[player] = Drawing.new("Text")
         Drawn.healthTexts[player].Size = 14
-        Drawn.healthTexts[player].Color = Color3.new(1, 1, 1)
+        Drawn.healthTexts[player].Color = ESPSettings.Colors.Health
         Drawn.healthTexts[player].Outline = true
         Drawn.healthTexts[player].Visible = false
     end
     
-    if not Drawn.distanceTexts then Drawn.distanceTexts = {} end
     if not Drawn.distanceTexts[player] then
         Drawn.distanceTexts[player] = Drawing.new("Text")
         Drawn.distanceTexts[player].Size = 13
-        Drawn.distanceTexts[player].Color = Color3.new(0.7, 0.7, 1)
+        Drawn.distanceTexts[player].Color = ESPSettings.Colors.Distance
         Drawn.distanceTexts[player].Outline = true
         Drawn.distanceTexts[player].Visible = false
     end
     
-    if not Drawn.weaponTexts then Drawn.weaponTexts = {} end
     if not Drawn.weaponTexts[player] then
         Drawn.weaponTexts[player] = Drawing.new("Text")
         Drawn.weaponTexts[player].Size = 12
-        Drawn.weaponTexts[player].Color = Color3.new(1, 1, 0)
+        Drawn.weaponTexts[player].Color = ESPSettings.Colors.Weapon
         Drawn.weaponTexts[player].Outline = true
         Drawn.weaponTexts[player].Visible = false
     end
     
-    if not Drawn.timeTexts then Drawn.timeTexts = {} end
     if not Drawn.timeTexts[player] then
         Drawn.timeTexts[player] = Drawing.new("Text")
         Drawn.timeTexts[player].Size = 12
-        Drawn.timeTexts[player].Color = Color3.new(0.5, 1, 0.5)
+        Drawn.timeTexts[player].Color = ESPSettings.Colors.Time
         Drawn.timeTexts[player].Outline = true
         Drawn.timeTexts[player].Visible = false
     end
     
-    if not Drawn.skeletons then Drawn.skeletons = {} end
     if not Drawn.skeletons[player] then
         Drawn.skeletons[player] = {}
         for i = 1, 15 do
             Drawn.skeletons[player][i] = Drawing.new("Line")
             Drawn.skeletons[player][i].Thickness = 1.5
-            Drawn.skeletons[player][i].Color = Color3.new(1, 1, 1)
+            Drawn.skeletons[player][i].Color = ESPSettings.Colors.Skeleton
             Drawn.skeletons[player][i].Visible = false
         end
     end
     
-    if not Drawn.tracers then Drawn.tracers = {} end
     if not Drawn.tracers[player] then
         Drawn.tracers[player] = Drawing.new("Line")
         Drawn.tracers[player].Thickness = 1
-        Drawn.tracers[player].Color = Color3.new(0, 1, 1)
+        Drawn.tracers[player].Color = ESPSettings.Colors.Tracer
         Drawn.tracers[player].Visible = false
     end
 end
@@ -720,19 +850,45 @@ Players.PlayerRemoving:Connect(function(player)
     if Drawn.boxes[player] then Drawn.boxes[player]:Remove(); Drawn.boxes[player] = nil end
     if Drawn.nameTexts[player] then Drawn.nameTexts[player]:Remove(); Drawn.nameTexts[player] = nil end
     if Drawn.healthTexts[player] then Drawn.healthTexts[player]:Remove(); Drawn.healthTexts[player] = nil end
+    if Drawn.distanceTexts[player] then Drawn.distanceTexts[player]:Remove(); Drawn.distanceTexts[player] = nil end
+    if Drawn.weaponTexts[player] then Drawn.weaponTexts[player]:Remove(); Drawn.weaponTexts[player] = nil end
+    if Drawn.timeTexts[player] then Drawn.timeTexts[player]:Remove(); Drawn.timeTexts[player] = nil end
+    if Drawn.tracers[player] then Drawn.tracers[player]:Remove(); Drawn.tracers[player] = nil end
+    if Drawn.skeletons[player] then
+        for i = 1, #Drawn.skeletons[player] do
+            if Drawn.skeletons[player][i] then Drawn.skeletons[player][i]:Remove() end
+        end
+        Drawn.skeletons[player] = nil
+    end
     ModifiedHeads[player] = nil
 end)
 
 local function updateESPForPlayer(player, drawings)
     if not player or not player.Parent or player == LocalPlayer then return end
     
+    local function hideAll()
+        for i, d in pairs(drawings) do
+            if i == "skeleton" and typeof(d) == "table" then
+                for _, sd in pairs(d) do if sd then sd.Visible = false end end
+            elseif d then
+                -- Check if it's a drawing object (either userdata or table with Visible property)
+                local s, e = pcall(function() d.Visible = false end)
+            end
+        end
+    end
+
     local success, err = pcall(function()
         local character = player.Character
-        if not ESPSettings.Enabled or not character or not character.Parent then
-            if drawings.line then drawings.line.Visible = false end
-            if drawings.box then drawings.box.Visible = false end
-            if drawings.name then drawings.name.Visible = false end
-            if drawings.health then drawings.health.Visible = false end
+        if not character or not character.Parent then hideAll() return end
+
+        -- Team Check
+        if ESPSettings.TeamCheck and player.Team == LocalPlayer.Team then
+            hideAll()
+            return
+        end
+
+        if not ESPSettings.Enabled then
+            hideAll()
             return
         end
         
@@ -740,112 +896,117 @@ local function updateESPForPlayer(player, drawings)
         local head = character:FindFirstChild("Head")
         local humanoid = character:FindFirstChild("Humanoid")
         
-        if not humanoidRootPart then 
-            if drawings.line then drawings.line.Visible = false end
-            if drawings.box then drawings.box.Visible = false end
-            if drawings.name then drawings.name.Visible = false end
-            if drawings.health then drawings.health.Visible = false end
+        if not humanoidRootPart or not head then 
+            hideAll()
             return 
         end
         
         local distance = (Camera.CFrame.Position - humanoidRootPart.Position).Magnitude
         if distance > ESPSettings.MaxDistance then
-            if drawings.line then drawings.line.Visible = false end
-            if drawings.box then drawings.box.Visible = false end
-            if drawings.name then drawings.name.Visible = false end
-            if drawings.health then drawings.health.Visible = false end
+            hideAll()
             return
         end
         
-        local screenPos, onScreen = worldToScreen(humanoidRootPart.Position)
+        local screenPos, onScreen, depth = worldToScreen(humanoidRootPart.Position)
+        if depth <= 0 then
+            hideAll()
+            return
+        end
+
+        -- Calculate Box Dimensions for better stability
+        local headPos, headOnScreen, headDepth = worldToScreen(head.Position + Vector3.new(0, 0.5, 0))
+        local legPos, legOnScreen, legDepth = worldToScreen(humanoidRootPart.Position - Vector3.new(0, 3, 0))
         
+        -- If head or leg are behind camera, hide all to be safe
+        if headDepth <= 0 or legDepth <= 0 then
+            hideAll()
+            return
+        end
+
+        local height = math.abs(headPos.Y - legPos.Y)
+        local width = height / 2
+        local boxTop = headPos.Y
+        local boxBottom = legPos.Y
+        local boxCenterX = screenPos.X
+
+        -- Line ESP
         if ESPSettings.Line and drawings.line then
             drawings.line.From = Vector2.new(Camera.ViewportSize.X / 2, 0)
-            drawings.line.To = Vector2.new(screenPos.X, screenPos.Y)
-            drawings.line.Visible = onScreen
-            drawings.line.Color = onScreen and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+            drawings.line.To = Vector2.new(boxCenterX, boxTop)
+            drawings.line.Visible = true
+            drawings.line.Color = ESPSettings.Colors.Line
             drawings.line.Transparency = 1
         elseif drawings.line then
             drawings.line.Visible = false
         end
         
-        if ESPSettings.Box and drawings.box and head then
-            local headPos, headOnScreen = worldToScreen(head.Position)
-            local legPos = humanoidRootPart.Position - Vector3.new(0, 3, 0)
-            local legScreenPos, _ = worldToScreen(legPos)
-            
-            local height = math.abs(headPos.Y - legScreenPos.Y)
-            local width = height / 2
-            
-            if height > 0 and width > 0 then
-                drawings.box.Position = Vector2.new(screenPos.X - width/2, headPos.Y)
-                drawings.box.Size = Vector2.new(width, height)
-                drawings.box.Visible = onScreen and headOnScreen
-                drawings.box.Color = Color3.new(1, 0, 0)
-                drawings.box.Transparency = 1
-            else
-                drawings.box.Visible = false
-            end
+        -- Box ESP
+        if ESPSettings.Box and drawings.box then
+            drawings.box.Position = Vector2.new(boxCenterX - width/2, boxTop)
+            drawings.box.Size = Vector2.new(width, height)
+            drawings.box.Visible = true
+            drawings.box.Color = ESPSettings.Colors.Box
+            drawings.box.Transparency = 1
         elseif drawings.box then
             drawings.box.Visible = false
         end
         
-        if ESPSettings.Name and drawings.name and onScreen then
-            drawings.name.Position = Vector2.new(screenPos.X, screenPos.Y - 35)
+        -- Name ESP (Stable above head)
+        if ESPSettings.Name and drawings.name then
+            drawings.name.Position = Vector2.new(boxCenterX, boxTop - 15)
             drawings.name.Text = player.Name
             drawings.name.Visible = true
             drawings.name.Center = true
-            drawings.name.Color = Color3.new(1, 1, 1)
+            drawings.name.Color = ESPSettings.Colors.Name
             drawings.name.Transparency = 1
         elseif drawings.name then
             drawings.name.Visible = false
         end
         
-        if ESPSettings.Health and drawings.health and humanoid and onScreen then
-            drawings.health.Position = Vector2.new(screenPos.X, screenPos.Y - 15)
+        -- Health ESP (Stable below name)
+        if ESPSettings.Health and drawings.health and humanoid then
+            drawings.health.Position = Vector2.new(boxCenterX, boxTop - 30)
             drawings.health.Text = "HP: " .. math.floor(humanoid.Health)
             drawings.health.Visible = true
             drawings.health.Center = true
-            drawings.health.Color = Color3.new(1, 1, 1)
+            drawings.health.Color = ESPSettings.Colors.Health
             drawings.health.Transparency = 1
         elseif drawings.health then
             drawings.health.Visible = false
         end
         
-        -- Distance ESP
+        -- Distance ESP (Stable below box)
         if ESPSettings.Distance and drawings.distance then
-            drawings.distance.Position = Vector2.new(screenPos.X, screenPos.Y + 10)
+            drawings.distance.Position = Vector2.new(boxCenterX, boxBottom + 5)
             drawings.distance.Text = "📏 " .. math.floor(distance) .. "m"
-            drawings.distance.Visible = onScreen
+            drawings.distance.Visible = true
             drawings.distance.Center = true
+            drawings.distance.Color = ESPSettings.Colors.Distance
             drawings.distance.Transparency = 1
         elseif drawings.distance then
             drawings.distance.Visible = false
         end
         
-        -- Weapon ESP
+        -- Weapon ESP (Stable below distance)
         if ESPSettings.Weapon and drawings.weapon then
             local tool = character:FindFirstChildOfClass("Tool")
-            if tool then
-                drawings.weapon.Position = Vector2.new(screenPos.X, screenPos.Y + 30)
-                drawings.weapon.Text = "🔫 " .. tool.Name
-                drawings.weapon.Visible = onScreen
-                drawings.weapon.Center = true
-                drawings.weapon.Transparency = 1
-            else
-                drawings.weapon.Visible = false
-            end
+            drawings.weapon.Position = Vector2.new(boxCenterX, boxBottom + 20)
+            drawings.weapon.Text = "🔫 " .. (tool and tool.Name or "None")
+            drawings.weapon.Visible = true
+            drawings.weapon.Center = true
+            drawings.weapon.Color = ESPSettings.Colors.Weapon
+            drawings.weapon.Transparency = 1
         elseif drawings.weapon then
             drawings.weapon.Visible = false
         end
         
-        -- Time ESP (Player Join Time)
+        -- Time ESP (Stable below weapon)
         if ESPSettings.Time and drawings.time then
-            local accountAge = player.AccountAge
-            drawings.time.Position = Vector2.new(screenPos.X, screenPos.Y + 50)
-            drawings.time.Text = "⏰ " .. accountAge .. " days"
-            drawings.time.Visible = onScreen
+            drawings.time.Position = Vector2.new(boxCenterX, boxBottom + 35)
+            drawings.time.Text = "⏰ " .. player.AccountAge .. " days"
+            drawings.time.Visible = true
             drawings.time.Center = true
+            drawings.time.Color = ESPSettings.Colors.Time
             drawings.time.Transparency = 1
         elseif drawings.time then
             drawings.time.Visible = false
@@ -854,136 +1015,83 @@ local function updateESPForPlayer(player, drawings)
         -- Tracer ESP
         if ESPSettings.Tracer and drawings.tracer then
             drawings.tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-            drawings.tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-            drawings.tracer.Visible = onScreen
-            drawings.tracer.Color = Color3.new(0, 1, 1)
+            drawings.tracer.To = Vector2.new(boxCenterX, boxBottom)
+            drawings.tracer.Visible = true
+            drawings.tracer.Color = ESPSettings.Colors.Tracer
             drawings.tracer.Transparency = 1
         elseif drawings.tracer then
             drawings.tracer.Visible = false
         end
         
         -- Skeleton ESP
-        if ESPSettings.Skeleton and drawings.skeleton and head then
-            local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
-            local leftArm = character:FindFirstChild("Left Arm") or character:FindFirstChild("LeftUpperArm")
-            local rightArm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightUpperArm")
-            local leftLeg = character:FindFirstChild("Left Leg") or character:FindFirstChild("LeftUpperLeg")
-            local rightLeg = character:FindFirstChild("Right Leg") or character:FindFirstChild("RightUpperLeg")
-            
-            if torso then
-                local headPos2D, headVis = worldToScreen(head.Position)
-                local torsoPos2D, torsoVis = worldToScreen(torso.Position)
-                
-                -- Head to Torso
-                if drawings.skeleton[1] and headVis and torsoVis then
-                    drawings.skeleton[1].From = Vector2.new(headPos2D.X, headPos2D.Y)
-                    drawings.skeleton[1].To = Vector2.new(torsoPos2D.X, torsoPos2D.Y)
-                    drawings.skeleton[1].Visible = true
+        if ESPSettings.Skeleton and drawings.skeleton then
+            local function getPartPos(name)
+                local p = character:FindFirstChild(name)
+                if p then
+                    local sp, os = worldToScreen(p.Position)
+                    if os then return sp end
                 end
-                
-                -- Arms
-                if leftArm then
-                    local leftArmPos, leftArmVis = worldToScreen(leftArm.Position)
-                    if drawings.skeleton[2] and torsoVis and leftArmVis then
-                        drawings.skeleton[2].From = Vector2.new(torsoPos2D.X, torsoPos2D.Y)
-                        drawings.skeleton[2].To = Vector2.new(leftArmPos.X, leftArmPos.Y)
-                        drawings.skeleton[2].Visible = true
-                    end
-                end
-                
-                if rightArm then
-                    local rightArmPos, rightArmVis = worldToScreen(rightArm.Position)
-                    if drawings.skeleton[3] and torsoVis and rightArmVis then
-                        drawings.skeleton[3].From = Vector2.new(torsoPos2D.X, torsoPos2D.Y)
-                        drawings.skeleton[3].To = Vector2.new(rightArmPos.X, rightArmPos.Y)
-                        drawings.skeleton[3].Visible = true
-                    end
-                end
-                
-                -- Legs
-                if leftLeg then
-                    local leftLegPos, leftLegVis = worldToScreen(leftLeg.Position)
-                    if drawings.skeleton[4] and torsoVis and leftLegVis then
-                        drawings.skeleton[4].From = Vector2.new(torsoPos2D.X, torsoPos2D.Y)
-                        drawings.skeleton[4].To = Vector2.new(leftLegPos.X, leftLegPos.Y)
-                        drawings.skeleton[4].Visible = true
-                    end
-                end
-                
-                if rightLeg then
-                    local rightLegPos, rightLegVis = worldToScreen(rightLeg.Position)
-                    if drawings.skeleton[5] and torsoVis and rightLegVis then
-                        drawings.skeleton[5].From = Vector2.new(torsoPos2D.X, torsoPos2D.Y)
-                        drawings.skeleton[5].To = Vector2.new(rightLegPos.X, rightLegPos.Y)
-                        drawings.skeleton[5].Visible = true
+                return nil
+            end
+
+            local parts = {
+                Head = getPartPos("Head"),
+                Torso = getPartPos("Torso") or getPartPos("UpperTorso"),
+                LShoulder = getPartPos("Left Shoulder") or getPartPos("LeftUpperArm"),
+                RShoulder = getPartPos("Right Shoulder") or getPartPos("RightUpperArm"),
+                LElbow = getPartPos("LeftLowerArm"),
+                RElbow = getPartPos("RightLowerArm"),
+                LHand = getPartPos("LeftHand"),
+                RHand = getPartPos("RightHand"),
+                LHip = getPartPos("Left Hip") or getPartPos("LeftUpperLeg"),
+                RHip = getPartPos("Right Hip") or getPartPos("RightUpperLeg"),
+                LKnee = getPartPos("LeftLowerLeg"),
+                RKnee = getPartPos("RightLowerLeg"),
+                LFoot = getPartPos("LeftFoot"),
+                RFoot = getPartPos("RightFoot")
+            }
+
+            local connections = {
+                {parts.Head, parts.Torso},
+                {parts.Torso, parts.LShoulder},
+                {parts.Torso, parts.RShoulder},
+                {parts.LShoulder, parts.LElbow},
+                {parts.RShoulder, parts.RElbow},
+                {parts.LElbow, parts.LHand},
+                {parts.RElbow, parts.RHand},
+                {parts.Torso, parts.LHip},
+                {parts.Torso, parts.RHip},
+                {parts.LHip, parts.LKnee},
+                {parts.RHip, parts.RKnee},
+                {parts.LKnee, parts.LFoot},
+                {parts.RKnee, parts.RFoot}
+            }
+
+            for i, conn in ipairs(connections) do
+                if drawings.skeleton[i] then
+                    if conn[1] and conn[2] then
+                        drawings.skeleton[i].From = conn[1]
+                        drawings.skeleton[i].To = conn[2]
+                        drawings.skeleton[i].Visible = true
+                        drawings.skeleton[i].Color = ESPSettings.Colors.Skeleton
+                    else
+                        drawings.skeleton[i].Visible = false
                     end
                 end
             end
         elseif drawings.skeleton then
             for i = 1, 15 do
-                if drawings.skeleton[i] then
-                    drawings.skeleton[i].Visible = false
-                end
+                if drawings.skeleton[i] then drawings.skeleton[i].Visible = false end
             end
         end
     end)
     
     if not success then
-        pcall(function()
-            if drawings.line then drawings.line.Visible = false end
-            if drawings.box then drawings.box.Visible = false end
-            if drawings.name then drawings.name.Visible = false end
-            if drawings.health then drawings.health.Visible = false end
-        end)
+        hideAll()
     end
 end
 
 RunService.RenderStepped:Connect(function()
-    if not ESPSettings.Enabled then
-        for player, line in pairs(Drawn.lines) do
-            if line then line.Visible = false end
-        end
-        for player, box in pairs(Drawn.boxes) do
-            if box then box.Visible = false end
-        end
-        for player, name in pairs(Drawn.nameTexts) do
-            if name then name.Visible = false end
-        end
-        for player, health in pairs(Drawn.healthTexts) do
-            if health then health.Visible = false end
-        end
-        if Drawn.distanceTexts then
-            for player, dist in pairs(Drawn.distanceTexts) do
-                if dist then dist.Visible = false end
-            end
-        end
-        if Drawn.weaponTexts then
-            for player, weapon in pairs(Drawn.weaponTexts) do
-                if weapon then weapon.Visible = false end
-            end
-        end
-        if Drawn.timeTexts then
-            for player, time in pairs(Drawn.timeTexts) do
-                if time then time.Visible = false end
-            end
-        end
-        if Drawn.skeletons then
-            for player, skeleton in pairs(Drawn.skeletons) do
-                if skeleton then
-                    for i = 1, 15 do
-                        if skeleton[i] then skeleton[i].Visible = false end
-                    end
-                end
-            end
-        end
-        if Drawn.tracers then
-            for player, tracer in pairs(Drawn.tracers) do
-                if tracer then tracer.Visible = false end
-            end
-        end
-        return
-    end
-    
     for player, _ in pairs(Drawn.lines) do
         if player and player.Parent and player ~= LocalPlayer then
             local espDrawings = {
@@ -1014,35 +1122,43 @@ local function enlargeHead(player)
     if not character then return false end
     
     local head = character:FindFirstChild("Head")
-    if not head then return false end
+    if not head or not head:IsA("BasePart") then return false end
     
-    local currentSize = head.Size.X
     local targetSize = HeadSizeSettings.Size
     
-    if math.abs(currentSize - targetSize) > 0.1 then
-        if not ModifiedHeads[player] then
-            ModifiedHeads[player] = {
-                OriginalSize = head.Size:Clone(),
-                OriginalMassless = head.Massless
-            }
-        end
-        
-        head.Size = Vector3.new(targetSize, targetSize, targetSize)
-        head.Massless = true
-        
-        local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
-        if face then
-            if not face:GetAttribute("OriginalFaceSize") then
-                face:SetAttribute("OriginalFaceSize", Vector2.new(face.Size.X, face.Size.Y))
-            end
-            
-            face.Size = Vector2.new(targetSize, targetSize)
-        end
-        
-        return true
+    -- Save original properties if not already saved
+    if not ModifiedHeads[player] then
+        ModifiedHeads[player] = {
+            OriginalSize = head.Size,
+            OriginalMassless = head.Massless,
+            OriginalCanCollide = head.CanCollide,
+            OriginalTransparency = head.Transparency
+        }
     end
     
-    return false
+    -- Apply big head
+    pcall(function()
+        head.Size = Vector3.new(targetSize, targetSize, targetSize)
+        head.Massless = true
+        head.CanCollide = false
+        head.Transparency = 0.5
+        
+        -- Scale mesh if exists
+        local mesh = head:FindFirstChildOfClass("SpecialMesh")
+        if mesh then
+            mesh.Scale = Vector3.new(targetSize/2, targetSize/2, targetSize/2)
+        end
+        
+        -- Scale face
+        local face = head:FindFirstChild("face") or head:FindFirstChildOfClass("Decal")
+        if face and face:IsA("Decal") then
+            pcall(function()
+                face.Transparency = 0
+            end)
+        end
+    end)
+    
+    return true
 end
 
 local function resetHead(player)
@@ -1188,6 +1304,22 @@ end)
 local espDistanceSlider = AddSlider(pageESP, "Max Distance", 436, 100, 5000, ESPSettings.MaxDistance, function(v) 
     ESPSettings.MaxDistance = v 
 end)
+
+AddToggle(pageESP, "👥 Team Check", 476, ESPSettings.TeamCheck, function(s) 
+    ESPSettings.TeamCheck = s 
+end)
+
+AddLabel(pageESP, "🎨 ESP COLORS", 516)
+
+AddColorCycle(pageESP, "Box Color", 546, ESPSettings.Colors.Box, function(c) ESPSettings.Colors.Box = c end)
+AddColorCycle(pageESP, "Line Color", 586, ESPSettings.Colors.Line, function(c) ESPSettings.Colors.Line = c end)
+AddColorCycle(pageESP, "Name Color", 626, ESPSettings.Colors.Name, function(c) ESPSettings.Colors.Name = c end)
+AddColorCycle(pageESP, "Health Color", 666, ESPSettings.Colors.Health, function(c) ESPSettings.Colors.Health = c end)
+AddColorCycle(pageESP, "Distance Color", 706, ESPSettings.Colors.Distance, function(c) ESPSettings.Colors.Distance = c end)
+AddColorCycle(pageESP, "Tracer Color", 746, ESPSettings.Colors.Tracer, function(c) ESPSettings.Colors.Tracer = c end)
+AddColorCycle(pageESP, "Skeleton Color", 786, ESPSettings.Colors.Skeleton, function(c) ESPSettings.Colors.Skeleton = c end)
+AddColorCycle(pageESP, "Weapon Color", 826, ESPSettings.Colors.Weapon, function(c) ESPSettings.Colors.Weapon = c end)
+AddColorCycle(pageESP, "Time Color", 866, ESPSettings.Colors.Time, function(c) ESPSettings.Colors.Time = c end)
 
 --========================================================--
 --====================  PLAYER TAB =====================--
@@ -1673,14 +1805,7 @@ local selectedCurrency = nil
 local function detectCurrencies()
     detectedCurrencies = {}
     
-    -- Common currency names
-    local currencyNames = {
-        "Money", "Cash", "Coins", "Gold", "Gems", "Diamonds", 
-        "Credits", "Points", "Tokens", "Currency", "Bucks", 
-        "Robux", "Dollars", "Wins", "Kills", "Score"
-    }
-    
-    -- Check LocalPlayer's leaderstats
+    -- Method 1: Check LocalPlayer's leaderstats
     if LocalPlayer:FindFirstChild("leaderstats") then
         for _, stat in pairs(LocalPlayer.leaderstats:GetChildren()) do
             if stat:IsA("IntValue") or stat:IsA("NumberValue") then
@@ -1688,7 +1813,81 @@ local function detectCurrencies()
                     Name = stat.Name,
                     Object = stat,
                     Value = stat.Value,
-                    Type = "Leaderstats"
+                    Type = "Leaderstats",
+                    Path = "LocalPlayer.leaderstats." .. stat.Name
+                })
+            end
+        end
+    end
+    
+    -- Method 2: Check PlayerGui for currency displays
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, gui in pairs(playerGui:GetDescendants()) do
+            if gui:IsA("IntValue") or gui:IsA("NumberValue") then
+                local name = gui.Name
+                if name:lower():find("money") or name:lower():find("cash") or 
+                   name:lower():find("coin") or name:lower():find("gold") or
+                   name:lower():find("gem") or name:lower():find("credit") then
+                    table.insert(detectedCurrencies, {
+                        Name = name,
+                        Object = gui,
+                        Value = gui.Value,
+                        Type = "PlayerGui",
+                        Path = "PlayerGui..." .. name
+                    })
+                end
+            end
+        end
+    end
+    
+    -- Method 3: Check Player's direct children
+    for _, obj in pairs(LocalPlayer:GetChildren()) do
+        if obj:IsA("IntValue") or obj:IsA("NumberValue") then
+            local name = obj.Name
+            if name:lower():find("money") or name:lower():find("cash") or 
+               name:lower():find("coin") or name:lower():find("gold") then
+                table.insert(detectedCurrencies, {
+                    Name = name,
+                    Object = obj,
+                    Value = obj.Value,
+                    Type = "Player",
+                    Path = "LocalPlayer." .. name
+                })
+            end
+        end
+    end
+    
+    -- Method 4: Check ReplicatedStorage
+    local repStorage = game:GetService("ReplicatedStorage")
+    for _, obj in pairs(repStorage:GetDescendants()) do
+        if obj:IsA("IntValue") or obj:IsA("NumberValue") then
+            local name = obj.Name
+            if name:lower():find("money") or name:lower():find("cash") or 
+               name:lower():find("coin") or name:lower():find("gold") then
+                table.insert(detectedCurrencies, {
+                    Name = name,
+                    Object = obj,
+                    Value = obj.Value,
+                    Type = "ReplicatedStorage",
+                    Path = "ReplicatedStorage..." .. name
+                })
+            end
+        end
+    end
+    
+    -- Method 5: Remote Exploit Scanning (Advanced)
+    for _, obj in pairs(game:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            local name = obj.Name:lower()
+            if name:find("add") or name:find("give") or name:find("reward") or 
+               name:find("money") or name:find("cash") or name:find("earn") then
+                table.insert(detectedCurrencies, {
+                    Name = "⚠️ Remote: " .. obj.Name,
+                    Object = obj,
+                    Value = "Exploitable",
+                    Type = "Remote",
+                    Path = obj:GetFullName()
                 })
             end
         end
@@ -1742,6 +1941,7 @@ detectBtn.MouseButton1Click:Connect(function()
     detectedCurrencies = currencies
     
     -- Clear dropdown
+    
     currencyDropdown:ClearAllChildren()
     
     if #currencies > 0 then
@@ -1779,7 +1979,7 @@ detectBtn.MouseButton1Click:Connect(function()
                 selectedCurrency = currency
                 currencyStatusLabel.Text = "✅ Selected: " .. currency.Name .. " = " .. currency.Value
                 currencyDropdown.Visible = false
-                showNotification("Currency Selected", currency.Name .. " selected!", 2)
+                showNotification("تم الاختيار", "تم اختيار " .. currency.Name, 2)
             end)
         end
         
@@ -1809,9 +2009,9 @@ amountCorner.CornerRadius = UDim.new(0, 6)
 
 local addMoneyBtn = Instance.new("TextButton", pageHack)
 addMoneyBtn.Size = UDim2.new(0, 200, 0, 35)
-addMoneyBtn.Position = UDim2.new(0, 220, 0, 150)
+addMoneyBtn.Position = UDim2.new(0, 10, 0, 195)
 addMoneyBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 80)
-addMoneyBtn.Text = "💰 Add Money"
+addMoneyBtn.Text = "💰 Add Money (إضافة)"
 addMoneyBtn.TextColor3 = Color3.new(1, 1, 1)
 addMoneyBtn.Font = Enum.Font.GothamBold
 addMoneyBtn.TextSize = 14
@@ -1823,37 +2023,171 @@ addMoneyCorner.CornerRadius = UDim.new(0, 8)
 addMoneyBtn.MouseButton1Click:Connect(function()
     local amount = tonumber(amountBox.Text)
     if not amount then
-        showNotification("Error", "Please enter a valid number", 2)
+        showNotification("خطأ", "الرجاء إدخال رقم صحيح", 2)
         return
     end
     
     if not selectedCurrency then
-        showNotification("Error", "Please detect currencies first", 2)
+        showNotification("خطأ", "الرجاء كشف العملات أولاً", 2)
         return
     end
     
-    local success = pcall(function()
-        if selectedCurrency.Object:IsA("IntValue") or selectedCurrency.Object:IsA("NumberValue") then
+    local oldValue = selectedCurrency.Object.Value
+    local success, err = pcall(function()
+        if selectedCurrency.Type == "Remote" then
+            if selectedCurrency.Object:IsA("RemoteEvent") then
+                selectedCurrency.Object:FireServer(amount)
+                selectedCurrency.Object:FireServer(amount, "Money")
+                selectedCurrency.Object:FireServer(LocalPlayer, amount)
+            elseif selectedCurrency.Object:IsA("RemoteFunction") then
+                selectedCurrency.Object:InvokeServer(amount)
+            end
+        elseif selectedCurrency.Object:IsA("IntValue") or selectedCurrency.Object:IsA("NumberValue") then
             selectedCurrency.Object.Value = selectedCurrency.Object.Value + amount
         end
     end)
     
-    if success then
-        showNotification("Success!", "Added " .. amount .. " to " .. selectedCurrency.Name, 3)
-        currencyStatusLabel.Text = "✅ " .. selectedCurrency.Name .. " = " .. selectedCurrency.Object.Value
-        amountBox.Text = ""
+    task.wait(0.1)
+    local newValue = selectedCurrency.Object.Value
+    
+    if success and newValue ~= oldValue then
+        selectedCurrency.Value = newValue
+        showNotification("نجح!", "تمت إضافة " .. amount .. " | القيمة الجديدة: " .. newValue, 3)
+        currencyStatusLabel.Text = "✅ " .. selectedCurrency.Name .. " = " .. newValue .. " (قديم: " .. oldValue .. ")"
+        currencyStatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    elseif success and newValue == oldValue then
+        showNotification("تحذير", "القيمة لم تتغير - اللعبة قد تحتوي على حماية", 3)
+        currencyStatusLabel.Text = "⚠️ " .. selectedCurrency.Name .. " = " .. newValue .. " (لم يتغير)"
+        currencyStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
     else
-        showNotification("Failed", "Game may have protection", 3)
+        showNotification("فشل", "حدث خطأ: " .. tostring(err), 3)
+        currencyStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
     end
 end)
 
-AddLabel(pageHack, "⚠️ Note: Some games have anti-cheat", 195)
+-- Set Money Button (تعيين المال مباشرة)
+local setMoneyBtn = Instance.new("TextButton", pageHack)
+setMoneyBtn.Size = UDim2.new(0, 200, 0, 35)
+setMoneyBtn.Position = UDim2.new(0, 220, 0, 195)
+setMoneyBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 60)
+setMoneyBtn.Text = "🎯 Set Money (تعيين)"
+setMoneyBtn.TextColor3 = Color3.new(1, 1, 1)
+setMoneyBtn.Font = Enum.Font.GothamBold
+setMoneyBtn.TextSize = 14
+setMoneyBtn.BorderSizePixel = 0
 
-AddLabel(pageHack, "Administration Tools:", 235)
+local setMoneyCorner = Instance.new("UICorner", setMoneyBtn)
+setMoneyCorner.CornerRadius = UDim.new(0, 8)
+
+setMoneyBtn.MouseButton1Click:Connect(function()
+    local amount = tonumber(amountBox.Text)
+    if not amount then
+        showNotification("خطأ", "الرجاء إدخال رقم صحيح", 2)
+        return
+    end
+    
+    if not selectedCurrency then
+        showNotification("خطأ", "الرجاء كشف العملات أولاً", 2)
+        return
+    end
+    
+    local oldValue = selectedCurrency.Object.Value
+    local success, err = pcall(function()
+        if selectedCurrency.Type == "Remote" then
+            if selectedCurrency.Object:IsA("RemoteEvent") then
+                selectedCurrency.Object:FireServer(amount)
+            elseif selectedCurrency.Object:IsA("RemoteFunction") then
+                selectedCurrency.Object:InvokeServer(amount)
+            end
+        elseif selectedCurrency.Object:IsA("IntValue") or selectedCurrency.Object:IsA("NumberValue") then
+            selectedCurrency.Object.Value = amount
+        end
+    end)
+    
+    task.wait(0.1)
+    local newValue = selectedCurrency.Object.Value
+    
+    if success and newValue == amount then
+        selectedCurrency.Value = newValue
+        showNotification("نجح!", "تم تعيين " .. selectedCurrency.Name .. " إلى " .. amount, 3)
+        currencyStatusLabel.Text = "✅ " .. selectedCurrency.Name .. " = " .. newValue .. " (قديم: " .. oldValue .. ")"
+        currencyStatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    elseif success and newValue ~= amount then
+        showNotification("تحذير", "القيمة لم تتغير كما متوقع - حماية محتملة", 3)
+        currencyStatusLabel.Text = "⚠️ " .. selectedCurrency.Name .. " = " .. newValue .. " (محاولة: " .. amount .. ")"
+        currencyStatusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+    else
+        showNotification("فشل", "حدث خطأ: " .. tostring(err), 3)
+        currencyStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+end)
+
+-- Infinite Money Toggle (تهكير لا نهائي)
+local infiniteMoneyToggle = AddToggle(pageHack, "♾️ Infinite Money Loop", 240, false, function(s)
+    if s and selectedCurrency then
+        showNotification("تفعيل", "تم تفعيل المال اللانهائي", 2)
+        task.spawn(function()
+            while infiniteMoneyToggle and s do
+                task.wait(0.5)
+                if selectedCurrency and selectedCurrency.Object then
+                    pcall(function()
+                        if selectedCurrency.Object:IsA("IntValue") or selectedCurrency.Object:IsA("NumberValue") then
+                            local targetAmount = tonumber(amountBox.Text) or 999999999
+                            if selectedCurrency.Object.Value < targetAmount then
+                                selectedCurrency.Object.Value = targetAmount
+                            end
+                        end
+                    end)
+                end
+            end
+        end)
+    else
+        showNotification("إيقاف", "تم إيقاف المال اللانهائي", 2)
+    end
+end)
+
+AddLabel(pageHack, "⚠️ ملاحظة: بعض الألعاب لديها حماية ضد التهكير", 290)
+AddLabel(pageHack, "💡 نظام التهكير المطور يحاول اختراق سيرفر اللعبة (Server-Side)", 310)
+AddLabel(pageHack, "🚀 إذا ظهر 'Remote' في القائمة، فمن المحتمل أن يكون المال حقيقياً", 330)
+
+AddLabel(pageHack, "Administration Tools:", 360)
+
+-- Unlock All Tools Button
+local unlockToolsBtn = Instance.new("TextButton", pageHack)
+unlockToolsBtn.Size = UDim2.new(0, 200, 0, 35)
+unlockToolsBtn.Position = UDim2.new(0, 10, 0, 390)
+unlockToolsBtn.BackgroundColor3 = Color3.fromRGB(200, 160, 40)
+unlockToolsBtn.Text = "🔓 Unlock All Tools (فتح الأدوات)"
+unlockToolsBtn.TextColor3 = Color3.new(1, 1, 1)
+unlockToolsBtn.Font = Enum.Font.GothamBold
+unlockToolsBtn.TextSize = 13
+unlockToolsBtn.BorderSizePixel = 0
+
+local unlockCorner = Instance.new("UICorner", unlockToolsBtn)
+unlockCorner.CornerRadius = UDim.new(0, 8)
+
+unlockToolsBtn.MouseButton1Click:Connect(function()
+    local count = 0
+    local function getTools(parent)
+        for _, obj in pairs(parent:GetDescendants()) do
+            if obj:IsA("Tool") or obj:IsA("HopperBin") then
+                local clone = obj:Clone()
+                clone.Parent = LocalPlayer.Backpack
+                count = count + 1
+            end
+        end
+    end
+    
+    getTools(game:GetService("ReplicatedStorage"))
+    getTools(game:GetService("Lighting"))
+    getTools(game:GetService("StarterPack"))
+    
+    showNotification("نجح!", "تم الحصول على " .. count .. " أداة بنجاح!", 3)
+end)
 
 local refreshBtn = Instance.new("TextButton", pageHack)
 refreshBtn.Size = UDim2.new(0, 200, 0, 35)
-refreshBtn.Position = UDim2.new(0, 10, 0, 265)
+refreshBtn.Position = UDim2.new(0, 220, 0, 390)
 refreshBtn.BackgroundColor3 = Color3.fromRGB(80, 120, 200)
 refreshBtn.Text = "🔄 Refresh Players"
 refreshBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -1890,7 +2224,7 @@ end)
 
 local fixESPBtn = Instance.new("TextButton", pageHack)
 fixESPBtn.Size = UDim2.new(0, 200, 0, 35)
-fixESPBtn.Position = UDim2.new(0, 220, 0, 265)
+fixESPBtn.Position = UDim2.new(0, 10, 0, 435)
 fixESPBtn.BackgroundColor3 = Color3.fromRGB(80, 150, 80)
 fixESPBtn.Text = "🔧 Fix ESP System"
 fixESPBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -1913,7 +2247,7 @@ end)
 
 local fixHeadsBtn = Instance.new("TextButton", pageHack)
 fixHeadsBtn.Size = UDim2.new(0, 200, 0, 35)
-fixHeadsBtn.Position = UDim2.new(0, 10, 0, 310)
+fixHeadsBtn.Position = UDim2.new(0, 220, 0, 435)
 fixHeadsBtn.BackgroundColor3 = Color3.fromRGB(180, 100, 200)
 fixHeadsBtn.Text = "👑 Fix Big Heads"
 fixHeadsBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -1930,11 +2264,11 @@ fixHeadsBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-AddLabel(pageHack, "System Information:", 360)
+AddLabel(pageHack, "System Information:", 470)
 
 local infoFrame = Instance.new("Frame", pageHack)
 infoFrame.Size = UDim2.new(0, 440, 0, 60)
-infoFrame.Position = UDim2.new(0, 10, 0, 390)
+infoFrame.Position = UDim2.new(0, 10, 0, 500)
 infoFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 infoFrame.BorderSizePixel = 0
 
@@ -1987,33 +2321,30 @@ Main.Visible = GUI_VISIBLE
 --========================================================--
 --====================  FINAL MESSAGE ====================--
 print("======================================================")
-print("🔥 BLOODIX V5 EDU FINAL - LOADED SUCCESSFULLY!")
+print("🔥 BLOODIX V6 ULTIMATE - تم التحميل بنجاح!")
 print("======================================================")
-print("🎮 Controls:")
-print("   • Press P to open/close control panel")
-print("   • Right Mouse Button for Aimbot (when enabled)")
+print("🎮 التحكم:")
+print("   • اضغط P لفتح/إغلاق لوحة التحكم")
+print("   • زر الماوس الأيمن للتصويب التلقائي")
 print("")
-print("✅ ALL SYSTEMS WORKING:")
-print("   • 🎯 Aimbot System - Complete")
-print("   • 👁️ ESP System - Updates every 0.1s")
-print("   • 👑 Big Heads System - Updates every 2s")
-print("   • 👤 Player Tools - Speed, Jump, NoClip, Fly")
-print("   • 📍 Teleport System - Works perfectly")
-print("   • 🛠️ Hack Tools - Refresh and Fix buttons")
+print("✅ جميع الأنظمة تعمل:")
+print("   • 🎯 نظام التصويب - كامل")
+print("   • 👁️ نظام ESP - يتحدث كل 0.1 ثانية")
+print("   • 👑 نظام الرؤوس الكبيرة - يتحدث كل 2 ثانية")
+print("   • 👤 أدوات اللاعب - السرعة، القفز، NoClip، الطيران")
+print("   • 📍 نظام الانتقال - يعمل بشكل مثالي")
+print("   • 💰 نظام تهكير المال - محسّن ومطور")
+print("   • 🛠️ أدوات الإدارة - أزرار التحديث والإصلاح")
+print("======================================================")
+print("💡 نصائح:")
+print("   • نظام المال يعمل على Client-Side فقط")
+print("   • استخدم زر Detect لكشف العملات في اللعبة")
+print("   • يمكنك إضافة أو تعيين المال مباشرة")
+print("   • ميزة Infinite Money تحافظ على المال ثابتاً")
 print("======================================================")
 
-local notification = Instance.new("TextLabel", ScreenGui)
-notification.Size = UDim2.new(0, 300, 0, 40)
-notification.Position = UDim2.new(0.5, -150, 0, 100)
-notification.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-notification.Text = "BLOODIX V5 - ALL SYSTEMS WORKING!"
-notification.TextColor3 = Color3.new(1, 1, 1)
-notification.Font = Enum.Font.GothamBold
-notification.TextSize = 16
-
-task.delay(3, function()
-    notification:Destroy()
-end)
+-- Enhanced notification with Arabic support
+showNotification("تم التحميل بنجاح!", "BLOODIX V6 ULTIMATE - جميع الأنظمة تعمل بشكل مثالي!", 5)
 
 --========================================================--
 --==================  EXTRA FEATURES TAB ================--
@@ -2955,9 +3286,10 @@ end
 local function showNotification(title, text, duration)
     duration = duration or 3
     
-    local notif = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+    local notif = Instance.new("ScreenGui", getParentGui())
     notif.Name = "Notification"
-    notif.DisplayOrder = 999999999
+    notif.DisplayOrder = 2147483647
+    notif.IgnoreGuiInset = true
     
     local frame = Instance.new("Frame", notif)
     frame.Size = UDim2.new(0, 300, 0, 80)
@@ -3240,10 +3572,3 @@ end)
 
 -- WELCOME NOTIFICATION
 showNotification("🔥 BLOODIX V6", "Loaded successfully! Press P to toggle", 5)
-
-print(" 50 NEW FEATURES LOADED SUCCESSFULLY!")
-print(" COMBAT: 13 Features")
-print(" MOVEMENT: 12 Features")
-print(" UTILITY: 12 Features")
-print(" TROLL: 13 Features")
-print("Total: 50 Amazing Features!")
