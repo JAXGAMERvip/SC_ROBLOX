@@ -3205,14 +3205,19 @@ task.spawn(function()
     end
 end)
 
--- Anti-AFK System
+-- Anti-AFK System (Enhanced)
 task.spawn(function()
     while true do
-        task.wait(120)
-        if NewFeatures.AntiAFK then
-            local VirtualUser = game:GetService("VirtualUser")
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
+        task.wait(60)
+        if NewFeatures.AntiAFK or UtilityFeatures.AntiAFK then
+            pcall(function()
+                local VirtualUser = game:GetService("VirtualUser")
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+                VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                task.wait(0.1)
+                VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            end)
         end
     end
 end)
@@ -4333,12 +4338,17 @@ task.spawn(function()
     end
 end)
 
--- Anti-AFK Connection
+-- Anti-AFK Connection (Enhanced Master)
 local VirtualUser = game:GetService("VirtualUser")
 LocalPlayer.Idled:Connect(function()
-    if UtilityFeatures.AntiAFK then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
+    if NewFeatures.AntiAFK or UtilityFeatures.AntiAFK then
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+            VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            task.wait(0.1)
+            VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end)
     end
 end)
 
